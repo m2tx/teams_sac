@@ -10,3 +10,4 @@ teams_sac
 
 # IDE
 .idea/
+.claude/settings.local.json
