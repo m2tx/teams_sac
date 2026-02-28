@@ -1,0 +1,12 @@
+# Binary
+teams_sac
+
+# Environment variables
+.env
+
+# Go build artifacts
+*.test
+*.out
+
+# IDE
+.idea/
