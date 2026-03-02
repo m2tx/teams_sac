@@ -2,7 +2,11 @@ module github.com/m2tx/teams_sac
 
 go 1.25.1
 
-require golang.org/x/oauth2 v0.35.0
+require (
+	github.com/google/generative-ai-go v0.20.1
+	golang.org/x/oauth2 v0.35.0
+	google.golang.org/api v0.269.0
+)
 
 require (
 	cloud.google.com/go v0.115.0 // indirect
@@ -15,7 +19,6 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/generative-ai-go v0.20.1 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.12 // indirect
@@ -32,7 +35,6 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	google.golang.org/api v0.269.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260217215200-42d3e9bedb6d // indirect
 	google.golang.org/grpc v1.79.1 // indirect

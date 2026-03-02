@@ -6,9 +6,9 @@ A Go bot that monitors a Microsoft Teams channel and automatically replies to ne
 
 1. Polls a Teams channel every 30 seconds via the Microsoft Graph API.
 2. For each unanswered message thread, it builds a prompt enriched with:
-   - Relevant document excerpts retrieved from the local RAG store (cosine similarity over Gemini embeddings).
+   - Relevant document excerpts retrieved from the local RAG store (TF-IDF cosine similarity, computed in-code).
    - Prior messages in the thread (conversation history).
-3. Sends the prompt to Gemini (`gemini-2.0-flash`) and posts the generated reply back to the thread.
+3. Sends the prompt to Gemini (`gemini-2.0-flash`) for generation and posts the reply back to the thread.
 
 ## Architecture
 
@@ -48,8 +48,8 @@ Place `.txt` or `.md` files under `./docs` (or the path set in `RAG_DOCS_DIR`). 
 
 1. Walk the directory recursively.
 2. Split each file into overlapping 500-character chunks (100-character overlap).
-3. Embed all chunks using `text-embedding-004`.
-4. At query time, embed the user question and retrieve the top-3 most similar chunks to inject into the Gemini prompt.
+3. Compute TF-IDF vectors for all chunks entirely in-code (no external API).
+4. At query time, compute the TF-IDF vector for the user question and retrieve the top-3 most similar chunks to inject into the Gemini prompt.
 
 If the directory is missing or empty the bot starts without RAG and falls back to Gemini's general knowledge.
 

@@ -50,16 +50,16 @@ internal/rag/store.go      — in-memory vector store: load docs, chunk, embed (
 ### `main.go`
 Reads env vars via `mustEnv` (fatals on missing) and `optEnv` (returns default). Creates:
 - An OAuth2 `clientcredentials.Config` → self-refreshing `http.Client` for Graph API calls.
-- A `genai.Client` → `GenerativeModel("gemini-2.0-flash")` and `EmbeddingModel("text-embedding-004")`.
-- A `rag.Store` (gracefully degrades to an empty store if `RAG_DOCS_DIR` is missing or empty).
-- An `agent.Agent` wiring the models and store together.
+- A `genai.Client` → `GenerativeModel("gemini-2.0-flash")` for answer generation.
+- A `rag.Store` built with TF-IDF (gracefully degrades to an empty store if `RAG_DOCS_DIR` is missing or empty).
+- An `agent.Agent` wiring the generative model and store together.
 - A `bot.Bot`, then polls every 30 seconds via `time.Ticker`.
 
 ### `internal/bot/bot.go`
 `Bot` holds the Graph API HTTP client, channel identifiers, and an `*agent.Agent`. `CheckAndRespond` fetches the last 10 top-level messages (`$top=10&$expand=replies`), skips messages sent by the bot itself, and for each unanswered thread calls `generateReply` then `sendReply`. `alreadyReplied` checks whether any reply has `From.Application.DisplayName == BotName`. `collectHistory` gathers non-bot reply bodies (oldest first) to pass as conversation context.
 
 ### `internal/agent/agent.go`
-`Agent.Answer` embeds the user question, calls `store.Search` to retrieve the top-3 most relevant chunks, then builds a structured prompt (system instructions → document excerpts → thread history → user question) and sends it to Gemini. RAG failures are non-fatal; the prompt is sent without context.
+`Agent.Answer` calls `store.Search` to retrieve the top-3 most relevant chunks, then builds a structured prompt (system instructions → document excerpts → thread history → user question) and sends it to Gemini. RAG failures are non-fatal; the prompt is sent without context.
 
 ### `internal/rag/store.go`
-`New` walks `docsDir` recursively, reads all `.txt`/`.md` files, splits them into overlapping 500-rune chunks (100-rune overlap), and batch-embeds them via `text-embedding-004`. `Search` embeds the query and returns the top-k chunks by cosine similarity. Returns an empty store (no error) when the directory is absent or contains no supported files.
+`New` walks `docsDir` recursively, reads all `.txt`/`.md` files, splits them into overlapping 500-rune chunks (100-rune overlap), computes TF-IDF vectors entirely in-code (no external API), and stores the dense vectors in memory. `Search` tokenizes the query, computes its TF-IDF vector using the stored IDF/vocabulary, and returns the top-k chunks by cosine similarity. Returns an empty store (no error) when the directory is absent or contains no supported files.

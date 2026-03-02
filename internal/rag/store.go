@@ -1,18 +1,16 @@
 package rag
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/google/generative-ai-go/genai"
+	"unicode"
 )
 
-// Chunk is a piece of a source document together with its embedding vector.
+// Chunk is a piece of a source document together with its TF-IDF embedding vector.
 type Chunk struct {
 	Text      string
 	Embedding []float32
@@ -21,6 +19,8 @@ type Chunk struct {
 // Store holds all embedded chunks in memory.
 type Store struct {
 	chunks []Chunk
+	idf    map[string]float64
+	vocab  map[string]int
 }
 
 // EmptyStore returns a Store with no chunks (used for graceful degradation).
@@ -28,10 +28,10 @@ func EmptyStore() *Store {
 	return &Store{}
 }
 
-// New builds a Store by loading, chunking, and embedding all .txt and .md
-// files found recursively under docsDir. If docsDir does not exist or
-// contains no supported files, an empty Store is returned with no error.
-func New(ctx context.Context, embedModel *genai.EmbeddingModel, docsDir string) (*Store, error) {
+// New builds a Store by loading, chunking, and embedding (TF-IDF) all .txt and .md
+// files found recursively under docsDir. If docsDir does not exist or contains no
+// supported files, an empty Store is returned with no error.
+func New(docsDir string) (*Store, error) {
 	texts, err := loadFiles(docsDir)
 	if err != nil {
 		return nil, err
@@ -48,23 +48,26 @@ func New(ctx context.Context, embedModel *genai.EmbeddingModel, docsDir string) 
 		return EmptyStore(), nil
 	}
 
-	fmt.Printf("[RAG] Embedding %d chunks from %s...\n", len(allChunks), docsDir)
+	idf := computeIDF(allChunks)
 
-	batch := embedModel.NewBatch()
-	for _, t := range allChunks {
-		batch.AddContent(genai.Text(t))
+	// Build a sorted, deterministic vocabulary.
+	terms := make([]string, 0, len(idf))
+	for t := range idf {
+		terms = append(terms, t)
+	}
+	sort.Strings(terms)
+	vocab := make(map[string]int, len(terms))
+	for i, t := range terms {
+		vocab[t] = i
 	}
 
-	resp, err := embedModel.BatchEmbedContents(ctx, batch)
-	if err != nil {
-		return nil, fmt.Errorf("embedding chunks: %w", err)
-	}
+	fmt.Printf("[RAG] Indexing %d chunks (vocab size: %d)...\n", len(allChunks), len(vocab))
 
-	store := &Store{}
-	for i, emb := range resp.Embeddings {
+	store := &Store{idf: idf, vocab: vocab}
+	for _, chunk := range allChunks {
 		store.chunks = append(store.chunks, Chunk{
-			Text:      allChunks[i],
-			Embedding: emb.Values,
+			Text:      chunk,
+			Embedding: tfidfVector(chunk, idf, vocab),
 		})
 	}
 
@@ -72,18 +75,14 @@ func New(ctx context.Context, embedModel *genai.EmbeddingModel, docsDir string) 
 	return store, nil
 }
 
-// Search returns the top-k chunks most similar to query by cosine similarity.
+// Search returns the top-k chunks most similar to query by cosine similarity over TF-IDF vectors.
 // Returns an empty slice if the store has no chunks.
-func (s *Store) Search(ctx context.Context, embedModel *genai.EmbeddingModel, query string, topK int) ([]Chunk, error) {
+func (s *Store) Search(query string, topK int) ([]Chunk, error) {
 	if len(s.chunks) == 0 {
 		return nil, nil
 	}
 
-	resp, err := embedModel.EmbedContent(ctx, genai.Text(query))
-	if err != nil {
-		return nil, fmt.Errorf("embedding query: %w", err)
-	}
-	queryVec := resp.Embedding.Values
+	queryVec := tfidfVector(query, s.idf, s.vocab)
 
 	type scored struct {
 		chunk Chunk
@@ -108,6 +107,54 @@ func (s *Store) Search(ctx context.Context, embedModel *genai.EmbeddingModel, qu
 		result[i] = scores[i].chunk
 	}
 	return result, nil
+}
+
+// tokenize lowercases text and splits on non-letter/non-digit runes.
+func tokenize(text string) []string {
+	return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+}
+
+// computeIDF computes smoothed IDF scores for all terms across the given chunks.
+// IDF(t) = log((N+1) / (df(t)+1)) + 1
+func computeIDF(chunks []string) map[string]float64 {
+	df := map[string]int{}
+	for _, chunk := range chunks {
+		seen := map[string]bool{}
+		for _, term := range tokenize(chunk) {
+			if !seen[term] {
+				df[term]++
+				seen[term] = true
+			}
+		}
+	}
+	n := float64(len(chunks))
+	idf := make(map[string]float64, len(df))
+	for term, count := range df {
+		idf[term] = math.Log((n+1)/(float64(count)+1)) + 1
+	}
+	return idf
+}
+
+// tfidfVector computes a dense TF-IDF vector for text using the provided IDF table and vocabulary.
+func tfidfVector(text string, idf map[string]float64, vocab map[string]int) []float32 {
+	terms := tokenize(text)
+	vec := make([]float32, len(vocab))
+	if len(terms) == 0 {
+		return vec
+	}
+	tf := map[string]float64{}
+	for _, t := range terms {
+		tf[t]++
+	}
+	total := float64(len(terms))
+	for term, freq := range tf {
+		if idx, ok := vocab[term]; ok {
+			vec[idx] = float32((freq / total) * idf[term])
+		}
+	}
+	return vec
 }
 
 // loadFiles walks docsDir and returns the text content of all .txt and .md files.

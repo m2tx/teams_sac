@@ -11,24 +11,22 @@ import (
 
 // Agent generates replies using Gemini with optional RAG context.
 type Agent struct {
-	model      *genai.GenerativeModel
-	embedModel *genai.EmbeddingModel
-	store      *rag.Store
+	model *genai.GenerativeModel
+	store *rag.Store
 }
 
 // New creates an Agent. store may be empty (graceful degradation).
-func New(model *genai.GenerativeModel, embedModel *genai.EmbeddingModel, store *rag.Store) *Agent {
+func New(model *genai.GenerativeModel, store *rag.Store) *Agent {
 	return &Agent{
-		model:      model,
-		embedModel: embedModel,
-		store:      store,
+		model: model,
+		store: store,
 	}
 }
 
 // Answer generates a reply to question, enriched with RAG context and thread history.
 // history contains prior thread messages, oldest first (bot messages excluded).
 func (a *Agent) Answer(ctx context.Context, question string, history []string) (string, error) {
-	chunks, err := a.store.Search(ctx, a.embedModel, question, 3)
+	chunks, err := a.store.Search(question, 3)
 	if err != nil {
 		// non-fatal: proceed without RAG context
 		chunks = nil

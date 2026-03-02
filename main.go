@@ -52,17 +52,16 @@ func main() {
 	defer geminiClient.Close()
 
 	genModel := geminiClient.GenerativeModel("gemini-2.0-flash")
-	embedModel := geminiClient.EmbeddingModel("text-embedding-004")
 
 	// RAG store (graceful degradation if docs dir is missing or empty)
 	docsDir := optEnv("RAG_DOCS_DIR", "./docs")
-	store, err := rag.New(ctx, embedModel, docsDir)
+	store, err := rag.New(docsDir)
 	if err != nil {
 		log.Printf("warning: RAG store init failed (%v), continuing without RAG", err)
 		store = rag.EmptyStore()
 	}
 
-	ag := agent.New(genModel, embedModel, store)
+	ag := agent.New(genModel, store)
 
 	b := bot.New(msClient, mustEnv("TEAMS_TEAM_ID"), mustEnv("TEAMS_CHANNEL_ID"), mustEnv("TEAMS_BOT_NAME"), ag)
 
