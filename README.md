@@ -21,7 +21,7 @@ internal/rag/store.go      — in-memory vector store: load docs, chunk, embed, 
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.25+
 - An Azure AD app registration with **application** permissions:
   - `ChannelMessage.Read.All`
   - `ChannelMessage.Send`
