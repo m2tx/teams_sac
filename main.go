@@ -63,7 +63,8 @@ func main() {
 
 	ag := agent.New(genModel, store)
 
-	b := bot.New(msClient, mustEnv("TEAMS_TEAM_ID"), mustEnv("TEAMS_CHANNEL_ID"), mustEnv("TEAMS_BOT_NAME"), ag)
+	teamsClient := bot.NewTeamsClient(msClient, mustEnv("TEAMS_TEAM_ID"), mustEnv("TEAMS_CHANNEL_ID"))
+	b := bot.New(teamsClient, mustEnv("TEAMS_BOT_NAME"), ag)
 
 	fmt.Printf("🤖 [%s] Bot started. Monitoring channel...\n", time.Now().Format("15:04:05"))
 
